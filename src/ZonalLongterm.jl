@@ -24,6 +24,7 @@ include("plot_investment.jl")
 
 ## build reduced network
 
+run(`mkdir -p ../data/reduced_net`) # create directory if does not exist
 write_reduced_network("../data/CWE2018_daily/", "../data/reduced_net/", 100, 20)
 
 ## CWE results
@@ -43,6 +44,7 @@ sol_pai = investment_pa()
 sol_par = redispatch_pa(sol_pai["x"], sol_pai["x_bar"])
 
 #### make plots
+run(`mkdir -p ../results`) # create the results directory
 plot_investment(sol_nodal, sol_fci, sol_fcr, sol_fdi, sol_fdr, sol_pai, sol_par)
 plot_net(sol_nodal, sol_fci, sol_fdi, sol_pai)
 plot_welfare(sol_nodal, sol_fci, sol_fcr, sol_fdi, sol_fdr, sol_pai, sol_par)
