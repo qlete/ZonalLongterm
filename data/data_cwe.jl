@@ -39,7 +39,7 @@ function load_data_cwe()
     MC_ex = Generators[!, :VariableCost]
 
     # get reduced network data
-    N, L, DT, D, R, G_Nidx, Gn, G_Zidx, Gz, clusters, TC, PTDF, Zn, Nz, dist_to_LMPs =
+    N, L, DT, D, R, G_Nidx, Gn, G_Zidx, Gz, clusters, TC, PTDF, Zn, Nz =
         read_reduced_network("../data/reduced_net/", Z, Zn, Nz)
     
     # get zonal reserve vector

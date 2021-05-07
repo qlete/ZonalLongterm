@@ -318,8 +318,6 @@ function write_reduced_network(sys_dir::AbstractString, out_dir::AbstractString,
     # Generate TC by minimizing LMP distance from initial net to reduce net
     TC_red = get_reduced_capacities(LMPs_reduced ./ DT, N_red, L_red, TC_init, 
         DT, D_red, R_red, PTDF_red, G_Nidx_red, Gn_red, X_bar, MC_ex, VOLL)
-    real_val = get_real_distance_to_LMPs(LMPs_reduced ./ DT, N_red, L_red, TC_red,
-        DT, D_red, R_red, PTDF_red, G_Nidx_red, Gn_red, X_bar, MC_ex, VOLL)
 
     # write tables to csv files
     CSV.write(joinpath(out_dir, "DT.csv"), Tables.table(Matrix(DT')))
@@ -329,7 +327,6 @@ function write_reduced_network(sys_dir::AbstractString, out_dir::AbstractString,
     CSV.write(joinpath(out_dir, "clusters.csv"), Tables.table(Matrix(clusters'), header=N))
     CSV.write(joinpath(out_dir, "TC.csv"), Tables.table(Matrix(TC_red'), header=L_red))
     CSV.write(joinpath(out_dir, "PTDF.csv"), Tables.table(Matrix(PTDF_red'), header=L_red))
-    CSV.write(joinpath(out_dir, "dist_to_LMPs.csv"), Tables.table(real_val*ones(1, 1), header=["dist_to_LMPs"]))
 
     return
 end
@@ -337,19 +334,20 @@ end
 function read_reduced_network(in_dir::AbstractString, Z::Vector, Zn::Vector, Nz::Vector)
     N = names(DataFrame(CSV.File(joinpath(in_dir, "D.csv"))))
     L = names(DataFrame(CSV.File(joinpath(in_dir, "TC.csv"))))
-    DT = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "DT.csv"))))
-    DT = reshape(DT, size(DT, 2), 1)
-    D = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "D.csv"))))
-    R = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "R.csv"))))
-    clusters = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "clusters.csv"))))
-    clusters = reshape(clusters, size(clusters, 2), 1)
-    TC = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "TC.csv"))))
-    TC = reshape(TC, size(TC, 2), 1)
-    G_Nidx = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "G_Nidx_red.csv"))))
-    G_Nidx = reshape(G_Nidx, size(G_Nidx, 2), 1)
-    PTDF = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "PTDF.csv"))))
-    dist_to_LMPs = convert(Matrix, DataFrame(CSV.File(joinpath(in_dir, "dist_to_LMPs.csv"))))
-    dist_to_LMPs = dist_to_LMPs[1, 1]
+    DT_df = DataFrame(CSV.File(joinpath(in_dir, "DT.csv")))
+    DT = collect(DT_df[1, i] for i in 1:size(DT_df, 2))
+    D_df = DataFrame(CSV.File(joinpath(in_dir, "D.csv")))
+    D = collect(D_df[i,j] for i in 1:size(D_df, 1), j in 1:size(D_df, 2))
+    R_df = DataFrame(CSV.File(joinpath(in_dir, "R.csv")))
+    R = collect(R_df[i,j] for i in 1:size(R_df, 1), j in 1:size(R_df, 2))
+    clusters_df = DataFrame(CSV.File(joinpath(in_dir, "clusters.csv")))
+    clusters = collect(clusters_df[1, i] for i in 1:size(clusters_df, 2))
+    TC_df = DataFrame(CSV.File(joinpath(in_dir, "TC.csv")))
+    TC = collect(TC_df[1, i] for i in 1:size(TC_df, 2))
+    G_Nidx_df = DataFrame(CSV.File(joinpath(in_dir, "G_Nidx_red.csv")))
+    G_Nidx = collect(G_Nidx_df[1, i] for i in 1:size(G_Nidx_df, 2))
+    PTDF_df = DataFrame(CSV.File(joinpath(in_dir, "PTDF.csv")))
+    PTDF = collect(PTDF_df[i,j] for i in 1:size(PTDF_df, 1), j in 1:size(PTDF_df, 2))
     Gn = Dict{Int, Vector{Int}}()
     for c in 1:maximum(clusters)
         Gn[c] = Int[]
@@ -382,7 +380,7 @@ function read_reduced_network(in_dir::AbstractString, Z::Vector, Zn::Vector, Nz:
         push!(Gz[G_Zidx[g]], g)
     end
 
-    return N, L, DT, D, R, G_Nidx, Gn, G_Zidx, Gz, clusters, TC, PTDF, Zn_red, Nz_red, dist_to_LMPs
+    return N, L, DT, D, R, G_Nidx, Gn, G_Zidx, Gz, clusters, TC, PTDF, Zn_red, Nz_red
 end
 
 # define exogeneous costs parameters
@@ -660,8 +658,6 @@ function get_reduced_capacities(LMPs::T, N::Vector{String}, L::Vector{String}, T
     TC_alljs[:,j] = current_sol
 
     bestj = argmin(allobjs)
-    real_val = get_real_distance_to_LMPs(LMPs, N, L, round.(current_sol),
-        DT, D, R, PTDF, G_Nidx, Gn, X_bar, MC_ex, VOLL)
     return round.(current_sol)
 end
 
@@ -759,40 +755,6 @@ function pwconstant(load::Vector{Float64}, nbred::Int, nb_pieces::Int)
     push!(approx_values, approxval[length(load_red)])
 
     return interval_lengths, round.(approx_values)
-end
-
-# This function computes the actual distance between LMPs (without convex relaxation)
-# of reduced and non-reduced nets, with given TC of lines.
-function get_real_distance_to_LMPs(LMPs::T, N::Vector{String}, L::Vector{String},
-    TC::Vector{Float64}, DT::Vector{Float64}, D::T, R::T, PTDF::T, G_Nidx::Vector, Gn::Dict, 
-    X_bar::Vector, MC_ex::Vector, VOLL::Float64) where T <: Matrix{Float64}
-
-    m = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0,
-        "Threads" => 1))
-    # define primal variables
-    @variable(m, 0 <= y[g=1:length(X_bar), j=1:size(D,1)] <= X_bar[g])
-    @variable(m, yre[j=1:size(D,1), 1:length(N)] >= 0)
-    @variable(m, s[j=1:size(D,1), 1:length(N)] >= 0)
-    @variable(m, f[j=1:size(D,1), l=1:length(L)])
-    @variable(m, r[j=1:size(D,1), 1:length(N)])
-
-    # define primal constraints
-    @constraint(m, rho[j=1:size(D,1), n=1:length(N)], -r[j,n] + sum(y[g,j] for
-        g=Gn[n]) + yre[j,n] + s[j,n] - D[j,n] == 0)
-    @constraint(m, phi_con[j=1:size(D,1)], sum(r[j,n] for n in 1:length(N)) == 0)
-    @constraint(m, psi_con[j=1:size(D,1), l=1:length(L)], f[j,l] - sum(PTDF[l,n]*
-        r[j,n] for n=1:length(N)) == 0)
-    @constraint(m, mure_con[j=1:size(D,1), n=1:length(N)], R[j,n] - yre[j,n] >= 0)
-    @constraint(m, lambdap_con[j=1:size(D,1), l=1:length(L)], TC[l] - f[j,l] >= 0)
-    @constraint(m, lambdam_con[j=1:size(D,1), l=1:length(L)], f[j,l] + TC[l] >= 0)
-
-    # objective: minimize LMP distance
-    @objective(m, Min, sum(DT[j]*VOLL*s[j,n] for j=1:size(D,1), n in 1:length(N)) +
-        sum(DT[j]*MC_ex[g]*y[g,j] for g=1:length(X_bar), j=1:size(D,1)))
-
-    optimize!(m)
-
-    return sum((LMPs[j,n]-dual(rho[j,n])/DT[j])^2 for j=1:size(D, 1), n=1:length(N))
 end
 
 end
