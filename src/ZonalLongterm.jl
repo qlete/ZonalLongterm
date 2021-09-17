@@ -33,6 +33,9 @@ G_Nidx, Gn, G_Zidx, Gz, isfastG, DT, MC, I, FC, MC_ex, FC_ex, MC_tilde, I_tilde,
     R, Rv, N, Z, Nz, Zn, X, X_bar, L, TC, PTDF = load_data_cwe()
 # nodal 
 sol_nodal = investment_nodal()
+risk_factor = 1.05
+sol_nodal_risk = investment_nodal(risk_factor) # 5% increase in investment cost to 
+# represent increase in variability of prices
 # centralized FBMC
 sol_fci = investment_fbmc_centralized()
 sol_fcr = redispatch_fbmc(sol_fci["x"], sol_fci["x_bar"], sol_fci["Z_tilde"])
@@ -45,6 +48,6 @@ sol_par = redispatch_pa(sol_pai["x"], sol_pai["x_bar"])
 
 #### make plots
 run(`mkdir -p ../results`) # create the results directory
-plot_investment(sol_nodal, sol_fci, sol_fcr, sol_fdi, sol_fdr, sol_pai, sol_par)
+plot_investment(sol_nodal, sol_nodal_risk, risk_factor, sol_fci, sol_fcr, sol_fdi, sol_fdr, sol_pai, sol_par)
 plot_net(sol_nodal, sol_fci, sol_fdi, sol_pai)
 plot_welfare(sol_nodal, sol_fci, sol_fcr, sol_fdi, sol_fdr, sol_pai, sol_par)

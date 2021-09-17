@@ -1,4 +1,4 @@
-function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict, 
+function plot_investment(sol_nodal::Dict, sol_nodal_risk::Dict, risk_factor::Float64, sol_fci::Dict, sol_fcr::Dict, 
     sol_fdi::Dict, sol_fdr::Dict, sol_pi::Dict, sol_pr::Dict)
 
     G = DataFrame(CSV.File("../data/CWE2018_daily/Generators.csv"))
@@ -16,6 +16,7 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
     investment_per_zone_type = zeros(length(Z), length(I)+1, 4)
 
     # NODAL RESULTS
+    #  no risk
     decom_long = X_bar .- sol_nodal["x_bar"]
     investment_cost = sum((I[i]+FC[i])*sol_nodal["x"][i,n] for i=1:length(I), n=1:length(N)) +
         sum(FC_ex[g]*sol_nodal["x_bar"][g] for g=1:length(X_bar))
@@ -35,8 +36,8 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
     push!(decommissioning, round.(Int, sum(X_bar.- sol_nodal["x_bar"]) .* 1000))
     decom_res = DataFrame(name=G[!, :Generator], tech=G[!, :Technology], decom=1000*decom_long)
     gd = groupby(decom_res, :tech)
-    decom_per_type[:, 1] = round.(Int, sum.(map(x -> x[!, :decom], gd)))
-    techs = first.(map(x -> x[!, :tech], gd))
+    decom_per_type[:, 1] = round.(Int, collect(sum(g.decom) for g in gd))
+    techs = first.(collect(g.tech for g in gd))
     decom_per_node = collect(isempty(Gn[n]) ? 0 : sum(decom_long[g] for g in Gn[n]) for n in 1:length(N))
     for n in 1:length(N)
         decom_per_zone[Zn[n], 1] += 1000*decom_per_node[n]
@@ -50,6 +51,19 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
         end
         investment_per_zone_type[z, length(I)+1, 1] = 0
     end
+    # risk (5% increase in investment cost for the nodal design)
+    decom_long = X_bar .- sol_nodal_risk["x_bar"]
+    investment_cost = sum((risk_factor*I[i]+FC[i])*sol_nodal_risk["x"][i,n] for i=1:length(I), n=1:length(N)) +
+        sum(FC_ex[g]*sol_nodal_risk["x_bar"][g] for g=1:length(X_bar))
+    op_cost = sum(DT[j]*(VOLL*sol_nodal_risk["s"][j,n] +
+        sum(MC[i]*(sol_nodal_risk["y"][i,j,n]) for i=1:length(I))) for j=1:size(D, 1), n=1:length(N)) +
+        sum(DT[j]*MC_ex[g]*(sol_nodal_risk["y_bar"][g,j]) for g=1:length(X_bar), j=1:size(D, 1))
+    total_cost = investment_cost + op_cost
+    push!(investment_costs, investment_cost)
+    push!(op_costs, op_cost)
+    push!(total_costs, total_cost)
+    push!(investment_nr, 0)
+    push!(decommissioning, round.(Int, sum(X_bar.- sol_nodal_risk["x_bar"]) .* 1000))
 
     # FBMC CENTRALIZED RESULTS
 
@@ -74,7 +88,7 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
     push!(decommissioning, round.(Int, sum(X_bar.- sol_fci["x_bar"]) .* 1000))
     decom_res = DataFrame(name=G[!, :Generator], tech=G[!, :Technology], decom=1000*decom_long)
     gd = groupby(decom_res, :tech)
-    decom_per_type[:, 2] = round.(Int, sum.(map(x -> x[!, :decom], gd)))
+    decom_per_type[:, 2] = round.(Int, collect(sum(g.decom) for g in gd))
     decom_per_node = collect(isempty(Gn[n]) ? 0 : sum(X_bar[g] - sol_fci["x_bar"][g] for g in Gn[n]) for n in 1:length(N))
     for n in 1:length(N)
         decom_per_zone[Zn[n], 2] += 1000*decom_per_node[n]
@@ -116,7 +130,7 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
     push!(decommissioning, round.(Int, sum(X_bar.- sol_fdi["x_bar"]) .* 1000))
     decom_res = DataFrame(name=G[!, :Generator], tech=G[!, :Technology], decom=1000*decom_long)
     gd = groupby(decom_res, :tech)
-    decom_per_type[:, 3] = round.(Int, sum.(map(x -> x[!, :decom], gd)))
+    decom_per_type[:, 3] = round.(Int, collect(sum(g.decom) for g in gd))
     decom_per_node = collect(isempty(Gn[n]) ? 0 : sum(X_bar[g] - sol_fdi["x_bar"][g] for g in Gn[n]) for n in 1:length(N))
     for n in 1:length(N)
         decom_per_zone[Zn[n], 3] += 1000*decom_per_node[n]
@@ -154,7 +168,7 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
     push!(decommissioning, round.(Int, sum(X_bar.- sol_pi["x_bar"]) .* 1000))
     decom_res = DataFrame(name=G[!, :Generator], tech=G[!, :Technology], decom=1000*decom_long)
     gd = groupby(decom_res, :tech)
-    decom_per_type[:, 4] = round.(Int, sum.(map(x -> x[!, :decom], gd)))
+    decom_per_type[:, 4] = round.(Int, collect(sum(g.decom) for g in gd))
     decom_per_node = collect(isempty(Gn[n]) ? 0 : sum(X_bar[g] - sol_pi["x_bar"][g] for g in Gn[n]) for n in 1:length(N))
     for n in 1:length(N)
         decom_per_zone[Zn[n], 4] += 1000*decom_per_node[n]
@@ -171,7 +185,7 @@ function plot_investment(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
 
     # Display results
     df_res = DataFrame()
-    df_res.Policy = ["Nodal", "FBMC-C", "FBMC-D", "PA-NR"]
+    df_res.Policy = ["Nodal", "Nodal risky", "FBMC-C", "FBMC-D", "PA-NR"]
     df_res.Decom = decommissioning
     df_res.NR = investment_nr
     df_res.OpCosts = op_costs
@@ -238,7 +252,7 @@ function plot_net(sol_nodal::Dict, sol_fc::Dict, sol_fd::Dict, sol_pa::Dict)
     L_ToBusidx = indexin(Lines[!, :ToBus], Buses[!, :Bus])
 
     # read clusters
-    clusters = convert(Matrix, DataFrame(
+    clusters = Matrix(DataFrame(
         CSV.File("../data/reduced_net/clusters.csv")))
     clusters = reshape(clusters, size(clusters, 2), 1)
 
@@ -342,7 +356,7 @@ function plot_welfare(sol_nodal::Dict, sol_fci::Dict, sol_fcr::Dict,
 
     countries = unique(Buses[!, :Country])
     # read clusters
-    clusters = convert(Matrix, DataFrame(CSV.File("../data/reduced_net/clusters.csv")))
+    clusters = Matrix(DataFrame(CSV.File("../data/reduced_net/clusters.csv")))
     clusters = reshape(clusters, size(clusters, 2), 1)
     # build a map from N_red to countries
     Nc = Dict()

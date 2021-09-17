@@ -1,4 +1,4 @@
-function investment_nodal()
+function investment_nodal(risk_factor::Float64=1.0)
 
     # Build capacity investment model
     m = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag" => 0))
@@ -31,7 +31,7 @@ function investment_nodal()
 
     @objective(m, Min, sum(DT[j]*(VOLL*s[j,n] +
         sum(MC[i]*(y[i,j,n] + yrv[i,j,n]) for i=1:length(I))) for j=1:size(D, 1), n=1:length(N)) +
-        sum((I[i] + FC[i])*x[i,n] for i=1:length(I), n=1:length(N)) +
+        sum((risk_factor*I[i] + FC[i])*x[i,n] for i=1:length(I), n=1:length(N)) +
         sum(DT[j]*MC_ex[g]*(y_bar[g,j] + yrv_bar[g,j]) for g=1:length(X_bar), j=1:size(D, 1)) +
         sum(FC_ex[g]*x_bar[g] for g=1:length(X_bar)))
 
