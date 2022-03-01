@@ -1,6 +1,6 @@
 # ZonalLongterm
 
-This repository contains the source code and datasets of the working paper *An analysis of zonal electricity markets from a long-term persepective* by Quentin Lété, Yves Smeers and Anthony Papavasiliou. 
+This repository contains the source code and datasets of the paper *[An analysis of zonal electricity markets from a long-term persepective](https://doi.org/10.1016/j.eneco.2022.105853)* by Quentin Lété, Yves Smeers and Anthony Papavasiliou. 
 
 The models are capacity expansion models based on three different short-term market designs: locational marginal pricing (nodal), flow-based market coupling and zonal with price aggregation. 
 An algorithm based on the splitting method is used to solve the decentralized FBMC model, represented as a linear complementarity problem.
